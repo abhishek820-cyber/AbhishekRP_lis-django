@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Register Patient — LIS{% endblock %}
+{% block page_title %}Patient Registration{% endblock %}
+{% block nav_pat %}active{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-8">
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-person-plus me-2 text-primary"></i>New Patient Registration
+  </div>
+  <div class="card-body">
+    <div id="form-alert" class="d-none"></div>
+    <form id="patient-form" novalidate>
+      {% csrf_token %}
+      <div class="row g-3">
+
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">MRN <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <input type="text" id="mrn" class="form-control"
+                   placeholder="Auto-generated or enter manually">
+            <button type="button" class="btn btn-outline-secondary"
+                    onclick="document.getElementById('mrn').value='';">Auto</button>
+          </div>
+          <div class="form-text">Leave blank to auto-generate</div>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Patient Name <span class="text-danger">*</span></label>
+          <input type="text" id="patient_name" class="form-control" maxlength="150" required>
+          <div class="invalid-feedback">Patient Name is required.</div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Age <span class="text-danger">*</span></label>
+          <input type="number" id="age" class="form-control" min="0" max="150" required>
+          <div class="invalid-feedback">Age must be 0–150.</div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Date of Birth</label>
+          <input type="date" id="dob" class="form-control" onchange="calcAge()">
+          <div class="form-text">Auto-fills Age</div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Gender <span class="text-danger">*</span></label>
+          <select id="gender" class="form-select" required>
+            <option value="">— Select —</option>
+            <option>Male</option>
+            <option>Female</option>
+            <option>Other</option>
+          </select>
+          <div class="invalid-feedback">Please select a Gender.</div>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Nationality <span class="text-danger">*</span></label>
+          <input type="text" id="nationality" class="form-control" required>
+          <div class="invalid-feedback">Nationality is required.</div>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Status</label>
+          <select id="status" class="form-select">
+            <option value="Active" selected>Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Phone</label>
+          <input type="tel" id="phone" class="form-control" maxlength="20">
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Email</label>
+          <input type="email" id="email" class="form-control" maxlength="150">
+        </div>
+
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary px-4">
+          <i class="bi bi-save me-1"></i>Register Patient
+        </button>
+        <a href="/patients/" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-calculate age from DOB
+function calcAge() {
+  const dob = new Date(document.getElementById('dob').value);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  document.getElementById('age').value = age >= 0 ? age : 0;
+}
+
+// Client-side validation
+function validate() {
+  let ok = true;
+  ['patient_name','gender','nationality'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.toggle('is-invalid', !el.value.trim());
+    if (!el.value.trim()) ok = false;
+  });
+  const age = parseInt(document.getElementById('age').value);
+  const ageEl = document.getElementById('age');
+  const ageOk = !isNaN(age) && age >= 0 && age <= 150;
+  ageEl.classList.toggle('is-invalid', !ageOk);
+  if (!ageOk) ok = false;
+  return ok;
+}
+
+document.getElementById('patient-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  if (!validate()) return;
+
+  const alertEl = document.getElementById('form-alert');
+  const payload = {
+    mrn:          document.getElementById('mrn').value.trim() || undefined,
+    patient_name: document.getElementById('patient_name').value.trim(),
+    age:          parseInt(document.getElementById('age').value),
+    gender:       document.getElementById('gender').value,
+    nationality:  document.getElementById('nationality').value.trim(),
+    dob:          document.getElementById('dob').value || null,
+    phone:        document.getElementById('phone').value.trim() || null,
+    email:        document.getElementById('email').value.trim() || null,
+    status:       document.getElementById('status').value,
+  };
+  if (!payload.mrn) delete payload.mrn;
+
+  try {
+    const res = await fetch('/api/v1/patients/', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alertEl.className = 'alert alert-success';
+      alertEl.innerHTML = `<i class="bi bi-check-circle me-2"></i>Patient registered! MRN: <strong>${data.mrn}</strong>
+        <a href="/patients/" class="ms-3 btn btn-sm btn-outline-success">View All Patients</a>`;
+      alertEl.classList.remove('d-none');
+      this.reset();
+    } else {
+      const errors = Object.values(data).flat().join(' ');
+      alertEl.className = 'alert alert-danger';
+      alertEl.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${errors}`;
+      alertEl.classList.remove('d-none');
+    }
+  } catch {
+    alertEl.className = 'alert alert-danger';
+    alertEl.textContent = 'Network error. Please try again.';
+    alertEl.classList.remove('d-none');
+  }
+  alertEl.scrollIntoView({ behavior: 'smooth' });
+});
+</script>
+{% endblock %}

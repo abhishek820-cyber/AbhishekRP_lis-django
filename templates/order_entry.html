@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block title %}New Order — LIS{% endblock %}
+{% block page_title %}Lab Order Entry{% endblock %}
+{% block nav_order %}active{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- Step 1: Patient selection -->
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white fw-semibold">
+        <span class="badge bg-primary me-2">1</span>Select Patient
+      </div>
+      <div class="card-body">
+        <div class="col-md-6 position-relative">
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" id="patient-search" class="form-control"
+                   placeholder="Search by MRN or name…"
+                   oninput="searchPatient()" autocomplete="off">
+          </div>
+          <div id="patient-dropdown"
+               class="list-group position-absolute w-100 z-3 d-none shadow"
+               style="top:100%;left:0"></div>
+        </div>
+        <div id="patient-header" class="alert alert-info mt-3 d-none">
+          <div class="row text-center">
+            <div class="col"><small class="text-muted">MRN</small><br>
+              <strong id="sel-mrn"></strong></div>
+            <div class="col"><small class="text-muted">Name</small><br>
+              <strong id="sel-name"></strong></div>
+            <div class="col"><small class="text-muted">Age</small><br>
+              <strong id="sel-age"></strong></div>
+            <div class="col"><small class="text-muted">Gender</small><br>
+              <strong id="sel-gender"></strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Add tests -->
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white fw-semibold">
+        <span class="badge bg-primary me-2">2</span>Add Tests
+      </div>
+      <div class="card-body">
+        <div class="col-md-6 position-relative mb-3">
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-flask"></i></span>
+            <input type="text" id="assay-search" class="form-control"
+                   placeholder="Type test code or name…"
+                   oninput="searchAssay()" autocomplete="off">
+          </div>
+          <div id="assay-dropdown"
+               class="list-group position-absolute w-100 z-3 d-none shadow"
+               style="top:100%;left:0"></div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>#</th><th>Code</th><th>Test Name</th>
+                <th>Sample</th><th>TAT (hrs)</th><th>Remove</th>
+              </tr>
+            </thead>
+            <tbody id="order-tbody">
+              <tr id="empty-row">
+                <td colspan="6" class="text-center text-muted py-3">
+                  No tests added yet.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-3">
+          <label class="form-label fw-semibold">Clinical Notes (optional)</label>
+          <textarea id="order-notes" class="form-control" rows="2"
+                    placeholder="Special instructions…"></textarea>
+        </div>
+
+        <div class="mt-3 d-flex gap-2">
+          <button class="btn btn-primary px-4" onclick="confirmOrder()">
+            <i class="bi bi-save me-1"></i>Save Order
+          </button>
+          <a href="/dashboard/" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm Order</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="confirm-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="submitOrder()">
+          Confirm &amp; Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedPatient = null;
+let selectedAssays  = [];
+const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+// Pre-fill patient from URL ?patient_id=
+const params = new URLSearchParams(location.search);
+if (params.get('patient_id')) {
+  fetch(`/api/v1/patients/${params.get('patient_id')}/`,
+        { headers: getAuthHeaders() })
+    .then(r => r.json()).then(setPatient);
+}
+
+async function searchPatient() {
+  const q = document.getElementById('patient-search').value.trim();
+  if (q.length < 2) {
+    document.getElementById('patient-dropdown').classList.add('d-none'); return;
+  }
+  const res  = await fetch(`/api/v1/patients/?search=${encodeURIComponent(q)}&status=Active`,
+                           { headers: getAuthHeaders() });
+  const data = await res.json();
+  const dd   = document.getElementById('patient-dropdown');
+  dd.innerHTML = '';
+  (data.results || []).forEach(p => {
+    const a = document.createElement('a');
+    a.href = '#'; a.className = 'list-group-item list-group-item-action';
+    a.innerHTML = `<strong>${p.mrn}</strong> — ${p.patient_name} (${p.age}y, ${p.gender})`;
+    a.onclick = e => { e.preventDefault(); setPatient(p); dd.classList.add('d-none'); };
+    dd.appendChild(a);
+  });
+  dd.classList.toggle('d-none', !data.results?.length);
+}
+
+function setPatient(p) {
+  selectedPatient = p;
+  document.getElementById('sel-mrn').textContent    = p.mrn;
+  document.getElementById('sel-name').textContent   = p.patient_name;
+  document.getElementById('sel-age').textContent    = p.age;
+  document.getElementById('sel-gender').textContent = p.gender;
+  document.getElementById('patient-header').classList.remove('d-none');
+  document.getElementById('patient-search').value =
+    `${p.mrn} — ${p.patient_name}`;
+}
+
+async function searchAssay() {
+  const q = document.getElementById('assay-search').value.trim();
+  if (q.length < 1) {
+    document.getElementById('assay-dropdown').classList.add('d-none'); return;
+  }
+  const res  = await fetch(
+    `/api/v1/tests/assays/?search=${encodeURIComponent(q)}&status=Active`,
+    { headers: getAuthHeaders() });
+  const data = await res.json();
+  const dd   = document.getElementById('assay-dropdown');
+  dd.innerHTML = '';
+  (data.results || []).forEach(a => {
+    const item = document.createElement('a');
+    item.href = '#'; item.className = 'list-group-item list-group-item-action';
+    item.innerHTML =
+      `<strong>${a.assay_code}</strong> — ${a.assay_name}
+       <small class="text-muted">(${a.sample_type})</small>`;
+    item.onclick = e => {
+      e.preventDefault(); addAssay(a);
+      dd.classList.add('d-none');
+      document.getElementById('assay-search').value = '';
+    };
+    dd.appendChild(item);
+  });
+  dd.classList.toggle('d-none', !data.results?.length);
+}
+
+function addAssay(a) {
+  if (selectedAssays.find(x => x.id === a.id)) return;
+  selectedAssays.push(a); renderGrid();
+}
+function removeAssay(id) {
+  selectedAssays = selectedAssays.filter(a => a.id !== id); renderGrid();
+}
+function renderGrid() {
+  const tbody = document.getElementById('order-tbody');
+  if (!selectedAssays.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No tests added yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = selectedAssays.map((a, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td><span class="badge bg-secondary">${a.assay_code}</span></td>
+      <td>${a.assay_name}</td>
+      <td>${a.sample_type}</td>
+      <td>${a.tat_hours || '—'}</td>
+      <td><button class="btn btn-sm btn-outline-danger"
+            onclick="removeAssay(${a.id})">
+          <i class="bi bi-x-lg"></i></button></td>
+    </tr>`).join('');
+}
+
+function confirmOrder() {
+  if (!selectedPatient) { alert('Please select a patient first.'); return; }
+  if (!selectedAssays.length) { alert('Please add at least one test.'); return; }
+  document.getElementById('confirm-body').innerHTML = `
+    <p><strong>Patient:</strong> ${selectedPatient.mrn} — ${selectedPatient.patient_name}</p>
+    <p><strong>Tests (${selectedAssays.length}):</strong></p>
+    <ul>${selectedAssays.map(a =>
+      `<li>${a.assay_code} — ${a.assay_name}</li>`).join('')}</ul>`;
+  modal.show();
+}
+
+async function submitOrder() {
+  modal.hide();
+  const res = await fetch('/api/v1/orders/', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      patient:   selectedPatient.id,
+      assay_ids: selectedAssays.map(a => a.id),
+      notes:     document.getElementById('order-notes').value.trim(),
+    })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    alert(`✅ Order placed!\nOrder No: ${data.order_no}`);
+    location.href = '/dashboard/';
+  } else {
+    alert('Error: ' + JSON.stringify(data));
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Clinical Results — LIS{% endblock %}
+{% block page_title %}Clinical Result View{% endblock %}
+{% block nav_report %}active{% endblock %}
+
+{% block content %}
+<!-- Patient search -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <div class="col-md-6 position-relative">
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" id="patient-search" class="form-control"
+               placeholder="Search patient by MRN or name…"
+               oninput="searchPatient()" autocomplete="off">
+      </div>
+      <div id="patient-dropdown"
+           class="list-group position-absolute w-100 z-3 d-none shadow"
+           style="top:100%;left:0"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Patient card + order history -->
+<div id="patient-section" class="d-none">
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body" id="patient-card"></div>
+  </div>
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold">
+      <i class="bi bi-clipboard2-pulse me-2"></i>Order History
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Order No</th><th>Tests</th>
+              <th>Ordered At</th><th>Status</th><th>Report</th>
+            </tr>
+          </thead>
+          <tbody id="order-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Report view -->
+<div id="report-section" class="d-none mt-4">
+  <div class="card border-0 shadow-sm" id="report-card"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function searchPatient() {
+  const q = document.getElementById('patient-search').value.trim();
+  if (q.length < 2) {
+    document.getElementById('patient-dropdown').classList.add('d-none'); return;
+  }
+  const res  = await fetch(`/api/v1/patients/?search=${encodeURIComponent(q)}`,
+                           { headers: getAuthHeaders() });
+  const data = await res.json();
+  const dd   = document.getElementById('patient-dropdown');
+  dd.innerHTML = '';
+  (data.results || []).forEach(p => {
+    const a = document.createElement('a');
+    a.href = '#'; a.className = 'list-group-item list-group-item-action';
+    a.innerHTML =
+      `<strong>${p.mrn}</strong> — ${p.patient_name} (${p.age}y, ${p.gender})`;
+    a.onclick = e => { e.preventDefault(); loadPatient(p); dd.classList.add('d-none'); };
+    dd.appendChild(a);
+  });
+  dd.classList.toggle('d-none', !data.results?.length);
+}
+
+async function loadPatient(p) {
+  document.getElementById('patient-search').value =
+    `${p.mrn} — ${p.patient_name}`;
+  document.getElementById('patient-card').innerHTML = `
+    <div class="row text-center">
+      <div class="col"><small class="text-muted">MRN</small><br>
+        <strong>${p.mrn}</strong></div>
+      <div class="col"><small class="text-muted">Name</small><br>
+        <strong>${p.patient_name}</strong></div>
+      <div class="col"><small class="text-muted">Age</small><br>
+        <strong>${p.age}</strong></div>
+      <div class="col"><small class="text-muted">Gender</small><br>
+        <strong>${p.gender}</strong></div>
+      <div class="col"><small class="text-muted">Nationality</small><br>
+        <strong>${p.nationality}</strong></div>
+    </div>`;
+  document.getElementById('patient-section').classList.remove('d-none');
+  document.getElementById('report-section').classList.add('d-none');
+
+  const oRes  = await fetch(
+    `/api/v1/orders/?patient=${p.id}&ordering=-ordered_at`,
+    { headers: getAuthHeaders() });
+  const oData = await oRes.json();
+  const orders = oData.results || [];
+  const tbody  = document.getElementById('order-tbody');
+
+  if (!orders.length) {
+    tbody.innerHTML =
+      '<tr><td colspan="5" class="text-muted text-center">No orders found.</td></tr>';
+    return;
+  }
+
+  const statusLabel = {1:'Ordered',2:'Collected',3:'In-Lab',4:'Completed'};
+  const statusClass  = {
+    1:'badge-ordered',2:'badge-collected',
+    3:'badge-inlab',  4:'badge-completed'
+  };
+
+  tbody.innerHTML = orders.map(o => `
+    <tr>
+      <td><strong>${o.order_no}</strong></td>
+      <td><span class="badge bg-secondary">${o.test_count}</span></td>
+      <td>${new Date(o.ordered_at).toLocaleString()}</td>
+      <td><span class="badge ${statusClass[o.order_status]}">
+        ${statusLabel[o.order_status]}</span></td>
+      <td>${o.order_status === 4
+        ? `<button class="btn btn-sm btn-outline-primary"
+             onclick="viewReport(${o.id})">
+             <i class="bi bi-file-medical me-1"></i>View Report</button>`
+        : '<span class="text-muted small">Not available yet</span>'}</td>
+    </tr>`).join('');
+}
+
+async function viewReport(orderId) {
+  const res = await fetch(`/api/v1/orders/${orderId}/report/`,
+                          { headers: getAuthHeaders() });
+  if (!res.ok) { const d = await res.json(); alert(d.detail); return; }
+  const r = await res.json();
+
+  const flagClass = f =>
+    ({H:'flag-H',L:'flag-L',CR:'flag-CR',N:'flag-N'}[f] || '');
+
+  document.getElementById('report-card').innerHTML = `
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start mb-3 no-print">
+        <h5 class="mb-0">
+          <i class="bi bi-file-medical-fill me-2 text-primary"></i>Laboratory Report
+        </h5>
+        <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i>Print / PDF
+        </button>
+      </div>
+      <hr>
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <p class="mb-1"><strong>Order No:</strong> ${r.order_no}</p>
+          <p class="mb-1"><strong>Ordered By:</strong> ${r.ordered_by}</p>
+          <p class="mb-0"><strong>Ordered At:</strong>
+            ${new Date(r.ordered_at).toLocaleString()}</p>
+        </div>
+        <div class="col-md-6">
+          <p class="mb-1"><strong>MRN:</strong> ${r.patient.mrn}</p>
+          <p class="mb-1"><strong>Patient:</strong> ${r.patient.name}</p>
+          <p class="mb-0"><strong>Age / Gender:</strong>
+            ${r.patient.age} / ${r.patient.gender}</p>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>Code</th><th>Test</th><th>Result</th>
+              <th>Unit</th><th>Reference Range</th><th>Flag</th><th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${r.results.map(x => `
+              <tr class="${x.flag==='CR'?'table-danger':x.flag==='H'?'table-warning':''}">
+                <td>${x.assay_code}</td>
+                <td>${x.assay_name}</td>
+                <td class="${flagClass(x.flag)}">${x.result_value}</td>
+                <td>${x.unit||'—'}</td>
+                <td>${x.normal_range||'—'}</td>
+                <td class="${flagClass(x.flag)}">${x.flag||'—'}</td>
+                <td>${x.remarks||''}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <small class="text-muted">Generated by LIS v1.0</small>
+    </div>`;
+  document.getElementById('report-section').classList.remove('d-none');
+  document.getElementById('report-section').scrollIntoView({ behavior:'smooth' });
+}
+</script>
+{% endblock %}

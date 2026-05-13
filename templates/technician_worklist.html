@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Lab Technician Worklist — LIS{% endblock %}
+{% block page_title %}Lab Technician Worklist{% endblock %}
+{% block nav_tech %}active{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-flask me-2 text-success"></i>Result Entry Worklist
+  </div>
+  <div class="card-body">
+    <div class="row g-2 mb-3">
+      <div class="col-md-3">
+        <select id="status-filter" class="form-select" onchange="loadOrders()">
+          <option value="2">Collected (Ready)</option>
+          <option value="3">In-Lab</option>
+          <option value="">All</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" id="search-input" class="form-control"
+                 placeholder="Order no or MRN…" oninput="loadOrders()">
+        </div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Order No</th><th>Patient</th><th>Tests</th>
+            <th>Ordered At</th><th>Status</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="worklist-tbody">
+          <tr><td colspan="6" class="text-center text-muted py-4">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="pagination" class="d-flex justify-content-end gap-2 mt-2"></div>
+  </div>
+</div>
+
+<!-- Result entry modal -->
+<div class="modal fade modal-xl" id="resultModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          Enter Results — <span id="modal-order-no"></span>
+        </h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="result-form-body">Loading…</div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success" onclick="saveResults()">
+          <i class="bi bi-save me-1"></i>Save &amp; Complete Order
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage  = 1;
+let activeOrderId = null;
+const resultModal = new bootstrap.Modal(document.getElementById('resultModal'));
+const statusLabel = {2:'Collected',3:'In-Lab',4:'Completed'};
+const statusClass  = {2:'badge-collected',3:'badge-inlab',4:'badge-completed'};
+
+async function loadOrders(page = 1) {
+  currentPage = page;
+  const status = document.getElementById('status-filter').value;
+  const q      = document.getElementById('search-input').value.trim();
+  let url = `/api/v1/orders/?page=${page}`;
+  if (status) url += `&order_status=${status}`;
+  if (q)      url += `&search=${encodeURIComponent(q)}`;
+
+  const tbody = document.getElementById('worklist-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center">Loading…</td></tr>';
+
+  const res  = await fetch(url, { headers: getAuthHeaders() });
+  const data = await res.json();
+  const rows = data.results || [];
+
+  if (!rows.length) {
+    tbody.innerHTML =
+      '<tr><td colspan="6" class="text-center text-muted py-4">No orders found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(o => `
+    <tr>
+      <td><strong>${o.order_no}</strong></td>
+      <td>${o.patient_mrn} — ${o.patient_name}</td>
+      <td><span class="badge bg-secondary">${o.test_count}</span></td>
+      <td>${new Date(o.ordered_at).toLocaleString()}</td>
+      <td><span class="badge ${statusClass[o.order_status]}">
+        ${statusLabel[o.order_status]}</span></td>
+      <td class="d-flex gap-1">
+        ${o.order_status === 2
+          ? `<button class="btn btn-sm btn-info"
+               onclick="markInLab(${o.id},'${o.order_no}')">
+               <i class="bi bi-arrow-right-circle me-1"></i>Mark In-Lab</button>`
+          : ''}
+        ${o.order_status === 3
+          ? `<button class="btn btn-sm btn-success"
+               onclick="openResults(${o.id},'${o.order_no}')">
+               <i class="bi bi-pencil-square me-1"></i>Enter Results</button>`
+          : ''}
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('pagination').innerHTML = `
+    <span class="text-muted small align-self-center">Total: ${data.count}</span>
+    <button class="btn btn-sm btn-outline-secondary"
+      ${!data.previous ? 'disabled' : ''}
+      onclick="loadOrders(${currentPage-1})">← Prev</button>
+    <button class="btn btn-sm btn-outline-secondary"
+      ${!data.next ? 'disabled' : ''}
+      onclick="loadOrders(${currentPage+1})">Next →</button>`;
+}
+
+async function markInLab(id, orderNo) {
+  if (!confirm(`Mark ${orderNo} as In-Lab?`)) return;
+  const res = await fetch(`/api/v1/orders/${id}/receive/`,
+    { method: 'PATCH', headers: getAuthHeaders() });
+  if (res.ok) loadOrders(currentPage);
+  else { const d = await res.json(); alert(d.detail || JSON.stringify(d)); }
+}
+
+async function openResults(orderId, orderNo) {
+  activeOrderId = orderId;
+  document.getElementById('modal-order-no').textContent = orderNo;
+  document.getElementById('result-form-body').innerHTML = 'Loading…';
+  resultModal.show();
+
+  const res   = await fetch(`/api/v1/orders/${orderId}/`,
+                            { headers: getAuthHeaders() });
+  const order = await res.json();
+
+  document.getElementById('result-form-body').innerHTML = `
+    <div class="table-responsive">
+      <table class="table align-middle" id="result-table"
+             data-lines='${JSON.stringify(order.lines)}'>
+        <thead class="table-light">
+          <tr>
+            <th>Code</th><th>Test</th><th>Sample</th>
+            <th>Result *</th><th>Unit</th><th>Flag</th><th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${order.lines.map(l => `
+            <tr>
+              <td><strong>${l.assay_code}</strong></td>
+              <td>${l.assay_name}</td>
+              <td>${l.sample_type}</td>
+              <td><input type="text" class="form-control form-control-sm"
+                         id="val-${l.assay}" placeholder="Value" required></td>
+              <td><input type="text" class="form-control form-control-sm"
+                         id="unit-${l.assay}"
+                         value="${l.unit || ''}" placeholder="Unit"></td>
+              <td>
+                <select class="form-select form-select-sm" id="flag-${l.assay}">
+                  <option value="">—</option>
+                  <option value="N">N — Normal</option>
+                  <option value="H">H — High</option>
+                  <option value="L">L — Low</option>
+                  <option value="CR">CR — Critical</option>
+                </select>
+              </td>
+              <td><input type="text" class="form-control form-control-sm"
+                         id="rmk-${l.assay}" placeholder="Remarks"></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+async function saveResults() {
+  const table = document.getElementById('result-table');
+  if (!table) return;
+  const lines = JSON.parse(table.dataset.lines);
+
+  const results = lines.map(l => ({
+    assay:        l.assay,
+    result_value: document.getElementById(`val-${l.assay}`)?.value.trim()  || '',
+    unit:         document.getElementById(`unit-${l.assay}`)?.value.trim() || '',
+    flag:         document.getElementById(`flag-${l.assay}`)?.value        || '',
+    remarks:      document.getElementById(`rmk-${l.assay}`)?.value.trim()  || '',
+    normal_range: l.normal_range || '',
+  }));
+
+  if (results.some(r => !r.result_value)) {
+    alert('Please enter a result value for every test.'); return;
+  }
+
+  const res = await fetch(`/api/v1/orders/${activeOrderId}/results/`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ results })
+  });
+
+  if (res.ok) {
+    resultModal.hide();
+    alert('✅ Results saved. Order marked Completed.');
+    loadOrders(currentPage);
+  } else {
+    const d = await res.json();
+    alert('Error: ' + (d.detail || JSON.stringify(d)));
+  }
+}
+
+loadOrders();
+</script>
+{% endblock %}

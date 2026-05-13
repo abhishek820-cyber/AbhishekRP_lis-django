@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Patient List — LIS{% endblock %}
+{% block page_title %}Patient List{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span class="fw-semibold"><i class="bi bi-people me-2 text-primary"></i>Patients</span>
+    <a href="/patients/register/" class="btn btn-primary btn-sm">
+      <i class="bi bi-person-plus me-1"></i>Register New
+    </a>
+  </div>
+  <div class="card-body">
+    <div class="row g-2 mb-3">
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" id="search-input" class="form-control"
+                 placeholder="Search by MRN or name…" oninput="loadPatients()">
+        </div>
+      </div>
+      <div class="col-md-3">
+        <select id="status-filter" class="form-select" onchange="loadPatients()">
+          <option value="">All Status</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>MRN</th><th>Name</th><th>Age</th>
+            <th>Gender</th><th>Nationality</th><th>Status</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="patient-tbody">
+          <tr><td colspan="7" class="text-center text-muted py-4">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="pagination" class="d-flex justify-content-end gap-2 mt-2"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+
+async function loadPatients(page = 1) {
+  currentPage = page;
+  const q      = document.getElementById('search-input').value.trim();
+  const status = document.getElementById('status-filter').value;
+  const tbody  = document.getElementById('patient-tbody');
+
+  let url = `/api/v1/patients/?page=${page}`;
+  if (q)      url += `&search=${encodeURIComponent(q)}`;
+  if (status) url += `&status=${status}`;
+
+  tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Loading…</td></tr>';
+
+  const res  = await fetch(url, { headers: getAuthHeaders() });
+  const data = await res.json();
+  const rows = data.results || [];
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No patients found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(p => `
+    <tr>
+      <td><span class="badge bg-light text-dark border">${p.mrn}</span></td>
+      <td class="fw-semibold">${p.patient_name}</td>
+      <td>${p.age}</td>
+      <td>${p.gender}</td>
+      <td>${p.nationality}</td>
+      <td><span class="badge ${p.status === 'Active' ? 'bg-success' : 'bg-secondary'}">
+        ${p.status}</span></td>
+      <td>
+        <a href="/orders/new/?patient_id=${p.id}"
+           class="btn btn-sm btn-outline-success">
+          <i class="bi bi-clipboard-plus"></i> Order
+        </a>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('pagination').innerHTML = `
+    <span class="text-muted small align-self-center">Total: ${data.count}</span>
+    <button class="btn btn-sm btn-outline-secondary"
+      ${!data.previous ? 'disabled' : ''}
+      onclick="loadPatients(${currentPage - 1})">← Prev</button>
+    <button class="btn btn-sm btn-outline-secondary"
+      ${!data.next ? 'disabled' : ''}
+      onclick="loadPatients(${currentPage + 1})">Next →</button>`;
+}
+
+loadPatients();
+</script>
+{% endblock %}
