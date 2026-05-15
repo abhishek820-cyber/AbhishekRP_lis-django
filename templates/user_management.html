@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}User Management — LIS{% endblock %}
+{% block page_title %}User Management{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span class="fw-semibold"><i class="bi bi-shield-person me-2 text-primary"></i>Staff Users</span>
+    <button class="btn btn-primary btn-sm" onclick="showForm()">
+      <i class="bi bi-plus-lg me-1"></i>Add User
+    </button>
+  </div>
+  <div class="card-body">
+
+    <!-- Add User Form -->
+    <div id="user-form" class="d-none mb-4 p-3 bg-light rounded">
+      <h6 class="fw-semibold mb-3">New Staff User</h6>
+      <div id="user-alert" class="d-none mb-2"></div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Username *</label>
+          <input type="text" id="u-username" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Email *</label>
+          <input type="email" id="u-email" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Password *</label>
+          <input type="password" id="u-password" class="form-control" placeholder="Min 8 characters">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Full Name *</label>
+          <input type="text" id="u-fullname" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Employee ID *</label>
+          <input type="text" id="u-empid" class="form-control" placeholder="e.g. EMP-002">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Role *</label>
+          <select id="u-role" class="form-select">
+            <option value="">— Select —</option>
+            <option value="Admin">Admin</option>
+            <option value="Physician">Physician</option>
+            <option value="Nurse">Nurse</option>
+            <option value="Phlebotomist">Phlebotomist</option>
+            <option value="LabTechnician">Lab Technician</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Designation *</label>
+          <input type="text" id="u-designation" class="form-control" placeholder="e.g. Senior Physician">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Department</label>
+          <input type="text" id="u-dept" class="form-control" placeholder="e.g. Cardiology">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Phone</label>
+          <input type="tel" id="u-phone" class="form-control">
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-primary" onclick="saveUser()">
+          <i class="bi bi-save me-1"></i>Save User
+        </button>
+        <button class="btn btn-secondary" onclick="hideForm()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Users table -->
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Employee ID</th><th>Full Name</th><th>Username</th>
+            <th>Role</th><th>Designation</th><th>Department</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="user-tbody">
+          <tr><td colspan="7" class="text-center text-muted py-4">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="pagination" class="d-flex justify-content-end gap-2 mt-2"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+
+const roleColors = {
+  Admin: 'bg-danger', Physician: 'bg-primary',
+  Nurse: 'bg-info text-dark', Phlebotomist: 'bg-warning text-dark',
+  LabTechnician: 'bg-success'
+};
+
+function showForm() { document.getElementById('user-form').classList.remove('d-none'); }
+function hideForm() { document.getElementById('user-form').classList.add('d-none'); }
+
+async function loadUsers(page = 1) {
+  currentPage = page;
+  const res  = await fetch(`/api/v1/users/?page=${page}`, { headers: getAuthHeaders() });
+  const data = await res.json();
+  const rows = data.results || [];
+  const tbody = document.getElementById('user-tbody');
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No users found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(u => `
+    <tr>
+      <td><span class="badge bg-light text-dark border">${u.employee_id}</span></td>
+      <td class="fw-semibold">${u.full_name}</td>
+      <td>${u.username}</td>
+      <td><span class="badge ${roleColors[u.role] || 'bg-secondary'}">${u.role}</span></td>
+      <td>${u.designation}</td>
+      <td>${u.department || '—'}</td>
+      <td><span class="badge ${u.status === 'Active' ? 'bg-success' : 'bg-secondary'}">
+        ${u.status}</span></td>
+    </tr>`).join('');
+
+  document.getElementById('pagination').innerHTML = `
+    <span class="text-muted small align-self-center">Total: ${data.count}</span>
+    <button class="btn btn-sm btn-outline-secondary"
+      ${!data.previous ? 'disabled' : ''}
+      onclick="loadUsers(${currentPage - 1})">← Prev</button>
+    <button class="btn btn-sm btn-outline-secondary"
+      ${!data.next ? 'disabled' : ''}
+      onclick="loadUsers(${currentPage + 1})">Next →</button>`;
+}
+
+async function saveUser() {
+  const alertEl = document.getElementById('user-alert');
+  const payload = {
+    username:    document.getElementById('u-username').value.trim(),
+    email:       document.getElementById('u-email').value.trim(),
+    password:    document.getElementById('u-password').value,
+    full_name:   document.getElementById('u-fullname').value.trim(),
+    employee_id: document.getElementById('u-empid').value.trim(),
+    role:        document.getElementById('u-role').value,
+    designation: document.getElementById('u-designation').value.trim(),
+    department:  document.getElementById('u-dept').value.trim(),
+    phone:       document.getElementById('u-phone').value.trim(),
+  };
+
+  if (!payload.username || !payload.email || !payload.password ||
+      !payload.full_name || !payload.employee_id || !payload.role || !payload.designation) {
+    alertEl.className = 'alert alert-danger';
+    alertEl.textContent = 'Please fill all required fields.';
+    alertEl.classList.remove('d-none'); return;
+  }
+
+  const res  = await fetch('/api/v1/users/', {
+    method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    alertEl.className = 'alert alert-success';
+    alertEl.textContent = `User "${payload.full_name}" created successfully!`;
+    alertEl.classList.remove('d-none');
+    loadUsers();
+  } else {
+    alertEl.className = 'alert alert-danger';
+    alertEl.textContent = Object.values(data).flat().join(' ');
+    alertEl.classList.remove('d-none');
+  }
+}
+
+loadUsers();
+</script>
+{% endblock %}

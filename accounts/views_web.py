@@ -70,3 +70,8 @@ class DashboardView(LoginRequiredMixin, View):
             ).count()
 
         return render(request, 'dashboard.html', context)
+    
+class UserManagementView(LoginRequiredMixin, View):
+    login_url = '/login/'
+    def get(self, request):
+        return render(request, 'user_management.html')

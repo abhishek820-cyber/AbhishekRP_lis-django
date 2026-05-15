@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}Test Menus & Assays — LIS{% endblock %}
+{% block page_title %}Test Menus & Assays{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- Test Menus -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-journal-medical me-2 text-primary"></i>Test Menus</span>
+        <button class="btn btn-primary btn-sm" onclick="showMenuForm()">
+          <i class="bi bi-plus-lg me-1"></i>Add Menu
+        </button>
+      </div>
+      <div class="card-body">
+        <!-- Add Menu Form (hidden by default) -->
+        <div id="menu-form" class="d-none mb-3 p-3 bg-light rounded">
+          <div class="mb-2">
+            <label class="form-label fw-semibold">Menu Code *</label>
+            <input type="text" id="menu-code" class="form-control" placeholder="e.g. HAEM">
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold">Menu Name *</label>
+            <input type="text" id="menu-name" class="form-control" placeholder="e.g. Haematology Panel">
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold">Department *</label>
+            <select id="menu-dept" class="form-select">
+              <option value="">— Select —</option>
+              <option>Serology</option>
+              <option>Haematology</option>
+              <option>Biochemistry</option>
+              <option>Microbiology</option>
+              <option>Immunology</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Status</label>
+            <select id="menu-status" class="form-select">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-success btn-sm" onclick="saveMenu()">Save</button>
+            <button class="btn btn-secondary btn-sm" onclick="hideMenuForm()">Cancel</button>
+          </div>
+          <div id="menu-alert" class="mt-2 d-none"></div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr><th>Code</th><th>Name</th><th>Dept</th><th>Status</th></tr>
+            </thead>
+            <tbody id="menu-tbody">
+              <tr><td colspan="4" class="text-center text-muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assays -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-flask me-2 text-success"></i>Assays (Tests)</span>
+        <button class="btn btn-success btn-sm" onclick="showAssayForm()">
+          <i class="bi bi-plus-lg me-1"></i>Add Assay
+        </button>
+      </div>
+      <div class="card-body">
+        <!-- Add Assay Form -->
+        <div id="assay-form" class="d-none mb-3 p-3 bg-light rounded">
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Test Menu *</label>
+              <select id="assay-menu" class="form-select">
+                <option value="">— Select Menu —</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Code *</label>
+              <input type="text" id="assay-code" class="form-control" placeholder="e.g. CBC">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Status</label>
+              <select id="assay-status" class="form-select">
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Assay Name *</label>
+              <input type="text" id="assay-name" class="form-control" placeholder="e.g. Complete Blood Count">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Sample Type *</label>
+              <input type="text" id="assay-sample" class="form-control" placeholder="e.g. Blood">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Normal Range</label>
+              <input type="text" id="assay-range" class="form-control" placeholder="e.g. 4.5-11.0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Unit</label>
+              <input type="text" id="assay-unit" class="form-control" placeholder="e.g. mg/dL">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">TAT (hours)</label>
+              <input type="number" id="assay-tat" class="form-control" placeholder="e.g. 4">
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-success btn-sm" onclick="saveAssay()">Save</button>
+            <button class="btn btn-secondary btn-sm" onclick="hideAssayForm()">Cancel</button>
+          </div>
+          <div id="assay-alert" class="mt-2 d-none"></div>
+        </div>
+
+        <!-- Search -->
+        <div class="input-group mb-3">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" id="assay-search" class="form-control"
+                 placeholder="Search assay code or name…" oninput="loadAssays()">
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr><th>Code</th><th>Name</th><th>Sample</th><th>Range</th><th>Status</th></tr>
+            </thead>
+            <tbody id="assay-tbody">
+              <tr><td colspan="5" class="text-center text-muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ---- Test Menus ----
+async function loadMenus() {
+  const res  = await fetch('/api/v1/tests/menus/', { headers: getAuthHeaders() });
+  const data = await res.json();
+  const rows = data.results || [];
+  const tbody = document.getElementById('menu-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No menus found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(m => `
+    <tr>
+      <td><span class="badge bg-secondary">${m.menu_code}</span></td>
+      <td>${m.menu_name}</td>
+      <td>${m.department}</td>
+      <td><span class="badge ${m.status === 'Active' ? 'bg-success' : 'bg-secondary'}">${m.status}</span></td>
+    </tr>`).join('');
+
+  // Populate assay menu dropdown
+  const sel = document.getElementById('assay-menu');
+  sel.innerHTML = '<option value="">— Select Menu —</option>' +
+    rows.map(m => `<option value="${m.id}">${m.menu_name}</option>`).join('');
+}
+
+function showMenuForm()  { document.getElementById('menu-form').classList.remove('d-none'); }
+function hideMenuForm()  { document.getElementById('menu-form').classList.add('d-none'); }
+function showAssayForm() { document.getElementById('assay-form').classList.remove('d-none'); }
+function hideAssayForm() { document.getElementById('assay-form').classList.add('d-none'); }
+
+async function saveMenu() {
+  const alertEl = document.getElementById('menu-alert');
+  const payload = {
+    menu_code:   document.getElementById('menu-code').value.trim(),
+    menu_name:   document.getElementById('menu-name').value.trim(),
+    department:  document.getElementById('menu-dept').value,
+    status:      document.getElementById('menu-status').value,
+  };
+  if (!payload.menu_code || !payload.menu_name || !payload.department) {
+    alertEl.className = 'alert alert-danger';
+    alertEl.textContent = 'Please fill all required fields.';
+    alertEl.classList.remove('d-none'); return;
+  }
+  const res  = await fetch('/api/v1/tests/menus/', {
+    method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (res.ok) {
+    alertEl.className = 'alert alert-success';
+    alertEl.textContent = `Menu "${data.menu_name}" saved!`;
+    alertEl.classList.remove('d-none');
+    loadMenus();
+  } else {
+    alertEl.className = 'alert alert-danger';
+    alertEl.textContent = Object.values(data).flat().join(' ');
+    alertEl.classList.remove('d-none');
+  }
+}
+
+// ---- Assays ----
+async function loadAssays() {
+  const q    = document.getElementById('assay-search').value.trim();
+  let url    = '/api/v1/tests/assays/';
+  if (q) url += `?search=${encodeURIComponent(q)}`;
+  const res  = await fetch(url, { headers: getAuthHeaders() });
+  const data = await res.json();
+  const rows = data.results || [];
+  const tbody = document.getElementById('assay-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No assays found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(a => `
+    <tr>
+      <td><span class="badge bg-secondary">${a.assay_code}</span></td>
+      <td>${a.assay_name}</td>
+      <td>${a.sample_type}</td>
+      <td>${a.normal_range || '—'} ${a.unit || ''}</td>
+      <td><span class="badge ${a.status === 'Active' ? 'bg-success' : 'bg-danger'}">${a.status}</span></td>
+    </tr>`).join('');
+}
+
+async function saveAssay() {
+  const alertEl = document.getElementById('assay-alert');
+  const payload = {
+    menu:         parseInt(document.getElementById('assay-menu').value),
+    assay_code:   document.getElementById('assay-code').value.trim(),
+    assay_name:   document.getElementById('assay-name').value.trim(),
+    sample_type:  document.getElementById('assay-sample').value.trim(),
+    normal_range: document.getElementById('assay-range').value.trim(),
+    unit:         document.getElementById('assay-unit').value.trim(),
+    tat_hours:    parseInt(document.getElementById('assay-tat').value) || null,
+    status:       document.getElementById('assay-status').value,
+  };
+  if (!payload.menu || !payload.assay_code || !payload.assay_name || !payload.sample_type) {
+    alertEl.className = 'alert alert-danger';
+    alertEl.textContent = 'Please fill all required fields.';
+    alertEl.classList.remove('d-none'); return;
+  }
+  const res  = await fetch('/api/v1/tests/assays/', {
+    method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (res.ok) {
+    alertEl.className = 'alert alert-success';
+    alertEl.textContent = `Assay "${data.assay_name}" saved!`;
+    alertEl.classList.remove('d-none');
+    loadAssays();
+  } else {
+    alertEl.className = 'alert alert-danger';
+    alertEl.textContent = Object.values(data).flat().join(' ');
+    alertEl.classList.remove('d-none');
+  }
+}
+
+// Load both on page start
+loadMenus();
+loadAssays();
+</script>
+{% endblock %}

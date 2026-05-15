@@ -9,6 +9,7 @@ urlpatterns = [
     path('patients/', include('patients.urls_web')),
     path('orders/',   include('orders.urls_web')),
     path('results/',  include('results.urls_web')),
+    path('labtests/', include('labtests.urls_web')), 
 
     # REST API endpoints
     path('api/v1/auth/',    include('accounts.urls')),
